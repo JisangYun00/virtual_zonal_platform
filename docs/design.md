@@ -41,9 +41,9 @@
 ## 미정
 
 - **Management 채널(.10)**: 제안은 Jetson이 `STATE`(전체 상태) 메시지 하나만 보내는 것. 연결 직후, 상태가 바뀔 때, 주기적으로 보냄. 재동기화, ZONE_CHANGED 알림, Heartbeat를 메시지 하나로 처리함. 주기와 끊김 판정 시간은 미정
-- **Zone 전환 지연 측정**: 두 시계가 47 ms 어긋나 있음(실측). 두 방법 중 선택해야 함
-  - 측정 전후에 시각 질의로 차이를 재서 보정: ±0.3 ms, root 불필요
-  - PTP 동기화: 노트북 쪽 `sudo` 필요, 측정 중 NTP 끄기
+- **Zone 전환 지연 측정**: 데스크톱–Jetson 시험에서 PTP 전 시계 차이 약 47 ms 확인. 실제 전환 지연은 아직 미측정. 발표용 노트북에서 아래 두 방법 중 선택 필요
+  - 측정 전후에 시각 질의로 차이를 재서 보정: 데스크톱 시험에서 추정 불확실성 약 ±0.3 ms, root 불필요
+  - PTP 동기화: 시계 차이 추정값 +0.011 ms(±0.066 ms). 양쪽 `sudo`와 측정 중 NTP 끄기 필요. Jetson 하드웨어 모드와 `--tx_timestamp_timeout 100`으로 동작 확인. 명령은 [measurements.md](measurements.md) 참고
 - Short/Long press 임계시간, 동시 입력 판정시간
 - Brake를 누르는 동안만 켤지 토글할지. 상태 모델은 그대로이고 `core/buttons.py`의 판정만 달라짐
 - 통신이 끊겼을 때의 GPIO Safe State

@@ -88,9 +88,54 @@ Jetson 로그에 명령마다 수신 IP, Zone, request_id, 명령, active_zone, 
 | Jetson PHC 시각 | 1970년 값. 시스템 시계와 무관하게 돎 (하드웨어 모드로 쓰려면 `phc2sys` 필요) |
 | Jetson linuxptp | 1.9.2 설치함. `ptp4l -i eth0 -H`가 `/dev/ptp0`를 잡고 오류 없이 시작 |
 | 데스크톱 PTP 하드웨어 | **없음** (r8169, software 타임스탬프만) |
-| 양쪽 PTP 동기화 | 미실시. 데스크톱 `sudo` 필요 |
-| **현재 시계 차이** | **Jetson − 데스크톱 = +47.015 ms (±0.313 ms)**. 양쪽 모두 NTP "동기화됨" 상태에서 측정 |
+| **PTP 전 시계 차이** | **Jetson − 데스크톱 = +47.015 ms (±0.313 ms)**. 양쪽 모두 NTP "동기화됨" 상태에서 측정 |
+| **PTP 후 시계 차이** | **+0.011 ms (±0.066 ms)**. 아래 PTP 동기화 시험 참고 |
 
 시계 차이 측정 방법: Jetson `192.168.10.10:5999`에 UDP로 `time.time()`을 돌려주는 임시 서버를 띄우고, 데스크톱에서 200회 질의해 RTT가 가장 짧은 샘플로 `offset = t_jetson − (t_send + t_recv) / 2`를 계산. 오차는 그 RTT의 절반.
 
-결론: 두 장치의 타임스탬프를 그대로 비교하면 47 ms가 섞임. Zone 전환 지연을 재려면 시계 차이 보정이나 PTP 동기화가 필요함 (`docs/design.md` 미정 항목).
+결론: 두 장치의 타임스탬프를 그대로 비교하면 47 ms가 섞임. Zone 전환 지연을 재려면 시계 차이 보정이나 PTP 동기화가 필요함.
+
+### PTP 동기화 시험: 성공
+
+- **결과:** 두 장치의 시계 차이가 47 ms에서 0.011 ms로 줄어듦 (UDP 시각 질의로 확인)
+- **구성:** 데스크톱 master(소프트웨어 모드), Jetson slave(하드웨어 모드)
+- **동작 명령:**
+
+```bash
+# 데스크톱 (master)
+sudo timedatectl set-ntp false
+sudo ptp4l -i enp8s0 -S -m
+
+# Jetson (slave): ptp4l이 NIC 시계(PHC)를 맞춤
+sudo timedatectl set-ntp false
+sudo ptp4l -i eth0 -H -s -m --tx_timestamp_timeout 100
+
+# Jetson: ptp4l이 s2이고 PHC가 현재 시각에 가까워진 뒤에만 실행
+sudo phc2sys -s eth0 -c CLOCK_REALTIME -O 0 -m
+
+# 끝낼 때: 양쪽 Ctrl-C 후
+sudo timedatectl set-ntp true
+```
+
+- **주의:** Jetson의 PHC 초기값이 1970년이었으므로, 동기화 전에 `phc2sys`를 켜면 시스템 시계가 잘못된 시각으로 바뀔 수 있음. 시험에서는 PHC와 시스템 시계 차이가 1초 이내로 줄어든 뒤 실행함
+- **`-O 0`을 쓰는 이유:** 소프트웨어 master는 UTC 시각을 보냄(`foreign master not using PTP timescale`). PHC도 UTC가 되므로 두 시계 사이 보정값은 0
+
+**실패한 시도**
+
+| 시도 | 결과 |
+|---|---|
+| Jetson 소프트웨어 모드 (`-S`) | `timed out while polling for tx timestamp` 후 FAULTY. `--tx_timestamp_timeout 50`으로도 같음. NVIDIA 포럼에 같은 증상 보고 여러 건 (Orin nvethernet) |
+| Jetson 하드웨어 모드, 대기 시간 기본값 | 같은 오류. linuxptp 1.9.2의 기본 대기 시간이 1 ms로 짧음 |
+| Jetson 하드웨어 모드, 대기 시간 100 ms | **성공.** 약 70초 동안 오류 0회 |
+
+**동기화 품질 (s2 상태, ptp4l 표본 70개, phc2sys 표본 34개)**
+
+| 항목 | 평균 | 절댓값 중앙값 | 절댓값 P95 | 절댓값 최대 |
+|---|---|---|---|---|
+| 데스크톱 → Jetson PHC (`master offset`) | +0.54 µs | 2.1 µs | 8.9 µs | 23.0 µs |
+| PHC → Jetson 시스템 시계 (`phc offset`) | +0.53 µs | 1.7 µs | 7.7 µs | 9.4 µs |
+| 단방향 네트워크 지연 (`path delay`) | 18.9 µs | 18.9 µs | 21.3 µs | 21.4 µs |
+
+- 이번 시험은 시계 동기화 확인용. 실제 Zone 전환 지연과 발표용 노트북에서의 동기화 품질은 미측정
+- UDP 질의의 최소 RTT는 동기화 전 0.627 ms, 동기화 후 0.132 ms. 차이의 원인은 미확인
+- 시험 후 Jetson의 ptp4l·phc2sys는 종료하고 NTP를 다시 켬. 데스크톱 ptp4l 종료와 NTP 복구는 직접 해야 함
