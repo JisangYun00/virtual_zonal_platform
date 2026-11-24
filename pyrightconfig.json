@@ -1,0 +1,6 @@
+{
+  "include": ["core", "zone_controller", "central", "tests"],
+  "extraPaths": ["."],
+  "pythonVersion": "3.8",
+  "typeCheckingMode": "basic"
+}
