@@ -1,0 +1,16 @@
+{
+  "inputs": {
+    "ZONE": null,
+    "LEFT": null,
+    "RIGHT": null
+  },
+  "outputs": {
+    "ZONE_FRONT": null,
+    "ZONE_REAR": null,
+    "ZONE_LEFT": null,
+    "ZONE_RIGHT": null,
+    "SIGNAL_LEFT": null,
+    "SIGNAL_RIGHT": null,
+    "BRAKE": null
+  }
+}
